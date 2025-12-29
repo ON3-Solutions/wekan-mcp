@@ -36,9 +36,9 @@ extract_json_number() {
 check_dependencies
 
 # Ask for endpoint (default if blank)
-read -p "Enter Wekan endpoint (default: https://wekan.namar0x0309.com): " Endpoint
+read -p "Enter Wekan endpoint (default: https://wekan.uan.com.br): " Endpoint
 if [ -z "$Endpoint" ]; then
-    Endpoint="https://wekan.namar0x0309.com"
+    Endpoint="https://wekan.uan.com.br"
 fi
 
 # Ask for username
@@ -104,14 +104,22 @@ EOF
 
 # Update mcp-inspector-config.json if it exists
 if [ -f "mcp-inspector-config.json" ]; then
-    # Use sed to update WEKAN_BASE_URL in both entries
-    # Update wekan-username entry
+    # Update WEKAN_BASE_URL, WEKAN_API_TOKEN, and WEKAN_USER_ID
     sed -i.bak 's|"WEKAN_BASE_URL": "[^"]*"|"WEKAN_BASE_URL": "'"$Endpoint"'"|g' mcp-inspector-config.json
-    
+    sed -i.bak 's|"WEKAN_API_TOKEN": "[^"]*"|"WEKAN_API_TOKEN": "'"$Token"'"|g' mcp-inspector-config.json
+
+    # Add WEKAN_USER_ID if not present, or update if present
+    if grep -q "WEKAN_USER_ID" mcp-inspector-config.json; then
+        sed -i.bak 's|"WEKAN_USER_ID": "[^"]*"|"WEKAN_USER_ID": "'"$UserId"'"|g' mcp-inspector-config.json
+    else
+        # Add WEKAN_USER_ID after WEKAN_API_TOKEN
+        sed -i.bak 's|"WEKAN_API_TOKEN": "'"$Token"'"|"WEKAN_API_TOKEN": "'"$Token"'",\n        "WEKAN_USER_ID": "'"$UserId"'"|g' mcp-inspector-config.json
+    fi
+
     # Clean up backup files
     rm -f mcp-inspector-config.json.bak
-    
-    echo "✅ Updated WEKAN_BASE_URL in mcp-inspector-config.json"
+
+    echo "Updated mcp-inspector-config.json with WEKAN_BASE_URL, WEKAN_API_TOKEN, and WEKAN_USER_ID"
 fi
 
 echo
