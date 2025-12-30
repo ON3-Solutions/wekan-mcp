@@ -109,6 +109,89 @@ server.tool("commentCard", "Add a comment to a card", {
   return { content: [{ type: "text", text: JSON.stringify({ ok: true, commentId: res._id }) }] };
 });
 
+// ============================================
+// Aggregated tools - simplify agent workflows
+// ============================================
+
+server.tool("getBoardOverview", "Get complete board overview with lists, swimlanes, custom fields, and card counts. Use this to understand the board structure before working with cards.", {
+  boardName: z.string().describe("The board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'")
+}, async (args) => {
+  const { boardName } = args;
+  const board = await wekan.findBoardByName(USER_ID, boardName);
+  if (!board) {
+    return { content: [{ type: "text", text: JSON.stringify({ error: `Board not found: ${boardName}` }) }] };
+  }
+  const overview = await wekan.getBoardOverview(board._id);
+  return { content: [{ type: "text", text: JSON.stringify(overview, null, 2) }] };
+});
+
+server.tool("getCardDetails", "Get a single card with full context: board/list/swimlane names, custom fields mapped by name, and comments. Use this when you need complete information about a specific card.", {
+  boardName: z.string().describe("The board name (partial match, case-insensitive)"),
+  cardTitle: z.string().describe("The card title (partial match, case-insensitive)"),
+  includeComments: z.boolean().optional().describe("Whether to include comments (default: true)")
+}, async (args) => {
+  const { boardName, cardTitle, includeComments = true } = args;
+
+  // Find board
+  const board = await wekan.findBoardByName(USER_ID, boardName);
+  if (!board) {
+    return { content: [{ type: "text", text: JSON.stringify({ error: `Board not found: ${boardName}` }) }] };
+  }
+
+  // Search for card in all lists
+  const lists = await wekan.listLists(board._id);
+  const lowerCardTitle = cardTitle.toLowerCase();
+
+  for (const list of lists) {
+    const cards = await wekan.listCards(board._id, list._id);
+    const foundCard = cards.find((c: any) => c.title.toLowerCase().includes(lowerCardTitle));
+    if (foundCard) {
+      const card = await wekan.getCardWithContext(board._id, list._id, foundCard._id, includeComments);
+      return { content: [{ type: "text", text: JSON.stringify(card, null, 2) }] };
+    }
+  }
+
+  return { content: [{ type: "text", text: JSON.stringify({ error: `Card not found: ${cardTitle}` }) }] };
+});
+
+server.tool("getDetailedCards", "Get all cards with full details (board/list names, custom fields mapped, comments). Use filters to narrow results.", {
+  boardName: z.string().optional().describe("Filter by board name (partial match, case-insensitive)"),
+  listName: z.string().optional().describe("Filter by list name (partial match, case-insensitive)"),
+  includeComments: z.boolean().optional().describe("Include comments for each card (default: false)")
+}, async (args) => {
+  const { boardName, listName, includeComments = false } = args;
+  const options: { boardName?: string; listName?: string; includeComments?: boolean } = { includeComments };
+  if (boardName) options.boardName = boardName;
+  if (listName) options.listName = listName;
+  // Use getMyCardsByName but without assignee filter (all cards)
+  const cards = await wekan.getMyCardsByName(USER_ID, options);
+  return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
+});
+
+server.tool("getMyCards", "Get all cards assigned to me with full details. This is the PRIMARY tool for retrieving your tasks. Use friendly name filters instead of IDs.", {
+  boardName: z.string().optional().describe("Filter by board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'"),
+  listName: z.string().optional().describe("Filter by list name (partial match, case-insensitive). Example: 'backlog' matches 'Backlog'"),
+  includeComments: z.boolean().optional().describe("Include comments for each card (default: false)")
+}, async (args) => {
+  const { boardName, listName, includeComments = false } = args;
+  const options: { boardName?: string; listName?: string; includeComments?: boolean } = { includeComments };
+  if (boardName) options.boardName = boardName;
+  if (listName) options.listName = listName;
+  const cards = await wekan.getMyCardsByName(USER_ID, options);
+  return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
+});
+
+server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*' or 'Em Desenvolvimento' lists. This is the BEST tool for daily workflow to see what needs to be done.", {
+  boardName: z.string().optional().describe("Filter by board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'"),
+  includeComments: z.boolean().optional().describe("Include comments for each card (default: false)")
+}, async (args) => {
+  const { boardName, includeComments = false } = args;
+  const options: { boardName?: string; includeComments?: boolean } = { includeComments };
+  if (boardName) options.boardName = boardName;
+  const cards = await wekan.getMyPendingCards(USER_ID, options);
+  return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
+});
+
 // Start transport
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -45,7 +45,44 @@ export interface WekanCard {
 
 export interface WekanComment {
   _id: string;
+  text?: string;
+  comment?: string;
+  userId?: string;
+  authorId?: string;
+  createdAt?: string;
   [key: string]: any;
+}
+
+export interface WekanCustomField {
+  _id: string;
+  name: string;
+  type: string;
+  [key: string]: any;
+}
+
+// Aggregated types for rich responses
+export interface DetailedCard {
+  id: string;
+  title: string;
+  description: string;
+  board: { id: string; title: string };
+  list: { id: string; title: string };
+  swimlane?: { id: string; title: string };
+  assignees: string[];
+  startAt?: string;
+  endAt?: string;
+  dueAt?: string;
+  createdAt?: string;
+  customFields: Record<string, any>;
+  comments?: Array<{ id: string; text: string; authorId: string; createdAt: string }>;
+}
+
+export interface BoardOverview {
+  id: string;
+  title: string;
+  lists: Array<{ id: string; title: string; cardCount: number }>;
+  swimlanes: Array<{ id: string; title: string }>;
+  customFields: Array<{ id: string; name: string; type: string }>;
 }
 
 export class Wekan {
@@ -121,12 +158,516 @@ export class Wekan {
     });
   }
 
-  // API surface
-  listBoards(userId: string): Promise<WekanBoard[]> { return this.get(`/api/users/${userId}/boards`); }
+  // ============================================
+  // Basic API surface
+  // ============================================
+  async listBoards(userId: string): Promise<WekanBoard[]> {
+    if (!userId) {
+      throw new Error("WEKAN_USER_ID is required. Run ./get-wekan-token.sh to configure.");
+    }
+    const result = await this.get(`/api/users/${userId}/boards`);
+    return Array.isArray(result) ? result : [];
+  }
   listLists(boardId: string): Promise<WekanList[]> { return this.get(`/api/boards/${boardId}/lists`); }
   listSwimlanes(boardId: string): Promise<WekanSwimlane[]> { return this.get(`/api/boards/${boardId}/swimlanes`); }
   listCards(boardId: string, listId: string): Promise<WekanCard[]> { return this.get(`/api/boards/${boardId}/lists/${listId}/cards`); }
+  getCard(boardId: string, listId: string, cardId: string): Promise<WekanCard> { return this.get(`/api/boards/${boardId}/lists/${listId}/cards/${cardId}`); }
+  getCustomFields(boardId: string): Promise<WekanCustomField[]> { return this.get(`/api/boards/${boardId}/custom-fields`); }
+  getCardComments(boardId: string, cardId: string): Promise<WekanComment[]> { return this.get(`/api/boards/${boardId}/cards/${cardId}/comments`); }
   createCard(boardId: string, listId: string, body: any): Promise<WekanCard> { return this.post(`/api/boards/${boardId}/lists/${listId}/cards`, body); }
   moveCard(boardId: string, fromListId: string, cardId: string, body: any): Promise<WekanCard> { return this.put(`/api/boards/${boardId}/lists/${fromListId}/cards/${cardId}`, body); }
   commentCard(boardId: string, cardId: string, authorId: string, comment: string): Promise<WekanComment> { return this.post(`/api/boards/${boardId}/cards/${cardId}/comments`, { authorId, comment }); }
+
+  // ============================================
+  // Aggregated methods - simplify agent workflows
+  // ============================================
+
+  /**
+   * Get board overview with lists, swimlanes, custom fields, and card counts
+   */
+  async getBoardOverview(boardId: string): Promise<BoardOverview> {
+    const [board, lists, swimlanes, customFields] = await Promise.all([
+      this.get(`/api/boards/${boardId}`),
+      this.listLists(boardId),
+      this.listSwimlanes(boardId),
+      this.getCustomFields(boardId)
+    ]);
+
+    // Get card counts for each list
+    const listsWithCounts = await Promise.all(
+      lists.map(async (list: WekanList) => {
+        const cards = await this.listCards(boardId, list._id);
+        return {
+          id: list._id,
+          title: list.title,
+          cardCount: cards.length
+        };
+      })
+    );
+
+    return {
+      id: board._id,
+      title: board.title,
+      lists: listsWithCounts,
+      swimlanes: swimlanes.map((s: WekanSwimlane) => ({ id: s._id, title: s.title })),
+      customFields: customFields.map((cf: WekanCustomField) => ({ id: cf._id, name: cf.name, type: cf.type }))
+    };
+  }
+
+  /**
+   * Get a single card with full context (board, list, swimlane names, custom fields mapped, comments)
+   */
+  async getCardWithContext(
+    boardId: string,
+    listId: string,
+    cardId: string,
+    includeComments: boolean = true
+  ): Promise<DetailedCard> {
+    // Fetch all needed data in parallel
+    const [card, board, lists, swimlanes, customFieldDefs, comments] = await Promise.all([
+      this.getCard(boardId, listId, cardId),
+      this.get(`/api/boards/${boardId}`),
+      this.listLists(boardId),
+      this.listSwimlanes(boardId),
+      this.getCustomFields(boardId),
+      includeComments ? this.getCardComments(boardId, cardId).catch(() => []) : Promise.resolve([])
+    ]);
+
+    // Find list and swimlane titles
+    const list = lists.find((l: WekanList) => l._id === listId) || { _id: listId, title: 'Unknown' };
+    const swimlane = swimlanes.find((s: WekanSwimlane) => s._id === card.swimlaneId);
+
+    // Map custom field IDs to names
+    const fieldIdToName: Record<string, string> = {};
+    customFieldDefs.forEach((cf: WekanCustomField) => {
+      fieldIdToName[cf._id] = cf.name;
+    });
+
+    const mappedCustomFields: Record<string, any> = {};
+    const cardCustomFields = card['customFields'] as Array<{_id: string; value: any}> | undefined;
+    if (cardCustomFields) {
+      for (const cf of cardCustomFields) {
+        const fieldName = fieldIdToName[cf._id] || cf._id;
+        mappedCustomFields[fieldName] = cf.value;
+      }
+    }
+
+    const result: DetailedCard = {
+      id: card._id,
+      title: card.title,
+      description: card.description || '',
+      board: { id: board._id, title: board.title },
+      list: { id: list._id, title: list.title },
+      assignees: card['assignees'] || [],
+      startAt: card['startAt'],
+      endAt: card['endAt'],
+      dueAt: card['dueAt'],
+      createdAt: card['createdAt'],
+      customFields: mappedCustomFields
+    };
+
+    if (swimlane) {
+      result.swimlane = { id: swimlane._id, title: swimlane.title };
+    }
+
+    if (includeComments) {
+      result.comments = comments.map((c: WekanComment) => ({
+        id: c._id,
+        text: c.text || c.comment || '',
+        authorId: c.authorId || c.userId || '',
+        createdAt: c.createdAt || ''
+      }));
+    }
+
+    return result;
+  }
+
+  /**
+   * Get all detailed cards across boards with optional filters
+   * This is the main aggregation method that replaces multiple API calls
+   */
+  async getDetailedCards(
+    userId: string,
+    options: {
+      boardId?: string;
+      listId?: string;
+      assigneeId?: string;
+      includeComments?: boolean;
+    } = {}
+  ): Promise<DetailedCard[]> {
+    const { boardId, listId, assigneeId, includeComments = false } = options;
+    const results: DetailedCard[] = [];
+
+    // Get boards (either specific or all)
+    let boards: WekanBoard[];
+    if (boardId) {
+      const board = await this.get(`/api/boards/${boardId}`);
+      boards = [board];
+    } else {
+      boards = await this.listBoards(userId);
+    }
+
+    // Process each board
+    for (const board of boards) {
+      // Get board metadata in parallel
+      const [lists, swimlanes, customFieldDefs] = await Promise.all([
+        this.listLists(board._id),
+        this.listSwimlanes(board._id),
+        this.getCustomFields(board._id)
+      ]);
+
+      // Create lookup maps
+      const swimlaneMap = new Map(swimlanes.map((s: WekanSwimlane) => [s._id, s]));
+      const fieldIdToName: Record<string, string> = {};
+      customFieldDefs.forEach((cf: WekanCustomField) => {
+        fieldIdToName[cf._id] = cf.name;
+      });
+
+      // Filter lists if specific listId provided
+      const listsToProcess = listId
+        ? lists.filter((l: WekanList) => l._id === listId)
+        : lists;
+
+      // Get cards from each list
+      for (const list of listsToProcess) {
+        const cards = await this.listCards(board._id, list._id);
+
+        for (const card of cards) {
+          // Filter by assignee if specified
+          const cardAssignees = card['assignees'] as string[] || [];
+          if (assigneeId && !cardAssignees.includes(assigneeId)) {
+            continue;
+          }
+
+          // Get full card details
+          const fullCard = await this.getCard(board._id, list._id, card._id);
+
+          // Get comments if requested
+          let comments: WekanComment[] = [];
+          if (includeComments) {
+            comments = await this.getCardComments(board._id, card._id).catch(() => []);
+          }
+
+          // Map custom fields
+          const mappedCustomFields: Record<string, any> = {};
+          const fullCardCustomFields = fullCard['customFields'] as Array<{_id: string; value: any}> | undefined;
+          if (fullCardCustomFields) {
+            for (const cf of fullCardCustomFields) {
+              const fieldName = fieldIdToName[cf._id] || cf._id;
+              mappedCustomFields[fieldName] = cf.value;
+            }
+          }
+
+          const swimlaneId = fullCard.swimlaneId || fullCard['swimlaneId'];
+          const swimlane = swimlaneId ? swimlaneMap.get(swimlaneId) : undefined;
+
+          const detailedCard: DetailedCard = {
+            id: fullCard._id,
+            title: fullCard.title,
+            description: fullCard.description || '',
+            board: { id: board._id, title: board.title },
+            list: { id: list._id, title: list.title },
+            assignees: fullCard['assignees'] || [],
+            startAt: fullCard['startAt'],
+            endAt: fullCard['endAt'],
+            dueAt: fullCard['dueAt'],
+            createdAt: fullCard['createdAt'],
+            customFields: mappedCustomFields
+          };
+
+          if (swimlane) {
+            detailedCard.swimlane = { id: swimlane._id, title: swimlane.title };
+          }
+
+          if (includeComments) {
+            detailedCard.comments = comments.map((c: WekanComment) => ({
+              id: c._id,
+              text: c.text || c.comment || '',
+              authorId: c.authorId || c.userId || '',
+              createdAt: c.createdAt || ''
+            }));
+          }
+
+          results.push(detailedCard);
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get cards assigned to current user with full details (by IDs)
+   */
+  async getMyCards(
+    userId: string,
+    options: { boardId?: string; includeComments?: boolean } = {}
+  ): Promise<DetailedCard[]> {
+    return this.getDetailedCards(userId, {
+      ...options,
+      assigneeId: userId
+    });
+  }
+
+  // ============================================
+  // Name-based methods - more agent-friendly
+  // ============================================
+
+  /**
+   * Find board by name (case-insensitive, partial match)
+   */
+  async findBoardByName(userId: string, boardName: string): Promise<WekanBoard | undefined> {
+    const boards = await this.listBoards(userId);
+    const lowerName = boardName.toLowerCase();
+    return boards.find((b: WekanBoard) => b.title.toLowerCase().includes(lowerName));
+  }
+
+  /**
+   * Find list by name in a board (case-insensitive, partial match)
+   */
+  async findListByName(boardId: string, listName: string): Promise<WekanList | undefined> {
+    const lists = await this.listLists(boardId);
+    const lowerName = listName.toLowerCase();
+    return lists.find((l: WekanList) => l.title.toLowerCase().includes(lowerName));
+  }
+
+  /**
+   * Get my cards with human-friendly filters (by names, not IDs)
+   * This is the PRIMARY method for agents to use
+   */
+  async getMyCardsByName(
+    userId: string,
+    options: {
+      boardName?: string;
+      listName?: string;
+      includeComments?: boolean;
+    } = {}
+  ): Promise<DetailedCard[]> {
+    const { boardName, listName, includeComments = false } = options;
+    const results: DetailedCard[] = [];
+
+    // Get all boards
+    let boards = await this.listBoards(userId);
+
+    // Filter by board name if provided
+    if (boardName) {
+      const lowerBoardName = boardName.toLowerCase();
+      boards = boards.filter((b: WekanBoard) => b.title.toLowerCase().includes(lowerBoardName));
+      if (boards.length === 0) {
+        return []; // No matching boards
+      }
+    }
+
+    // Process each board
+    for (const board of boards) {
+      // Get board metadata in parallel
+      const [lists, swimlanes, customFieldDefs] = await Promise.all([
+        this.listLists(board._id),
+        this.listSwimlanes(board._id),
+        this.getCustomFields(board._id)
+      ]);
+
+      // Create lookup maps
+      const swimlaneMap = new Map(swimlanes.map((s: WekanSwimlane) => [s._id, s]));
+      const fieldIdToName: Record<string, string> = {};
+      customFieldDefs.forEach((cf: WekanCustomField) => {
+        fieldIdToName[cf._id] = cf.name;
+      });
+
+      // Filter lists by name if provided
+      let listsToProcess = lists;
+      if (listName) {
+        const lowerListName = listName.toLowerCase();
+        listsToProcess = lists.filter((l: WekanList) => l.title.toLowerCase().includes(lowerListName));
+        if (listsToProcess.length === 0) {
+          continue; // No matching lists in this board
+        }
+      }
+
+      // Get cards from each list
+      for (const list of listsToProcess) {
+        const cards = await this.listCards(board._id, list._id);
+
+        for (const card of cards) {
+          // Filter by current user (my cards)
+          const cardAssignees = card['assignees'] as string[] || [];
+          if (!cardAssignees.includes(userId)) {
+            continue;
+          }
+
+          // Get full card details
+          const fullCard = await this.getCard(board._id, list._id, card._id);
+
+          // Get comments if requested
+          let comments: WekanComment[] = [];
+          if (includeComments) {
+            comments = await this.getCardComments(board._id, card._id).catch(() => []);
+          }
+
+          // Map custom fields
+          const mappedCustomFields: Record<string, any> = {};
+          const fullCardCustomFields = fullCard['customFields'] as Array<{_id: string; value: any}> | undefined;
+          if (fullCardCustomFields) {
+            for (const cf of fullCardCustomFields) {
+              const fieldName = fieldIdToName[cf._id] || cf._id;
+              mappedCustomFields[fieldName] = cf.value;
+            }
+          }
+
+          const swimlaneId = fullCard.swimlaneId || fullCard['swimlaneId'];
+          const swimlane = swimlaneId ? swimlaneMap.get(swimlaneId) : undefined;
+
+          const detailedCard: DetailedCard = {
+            id: fullCard._id,
+            title: fullCard.title,
+            description: fullCard.description || '',
+            board: { id: board._id, title: board.title },
+            list: { id: list._id, title: list.title },
+            assignees: fullCard['assignees'] || [],
+            startAt: fullCard['startAt'],
+            endAt: fullCard['endAt'],
+            dueAt: fullCard['dueAt'],
+            createdAt: fullCard['createdAt'],
+            customFields: mappedCustomFields
+          };
+
+          if (swimlane) {
+            detailedCard.swimlane = { id: swimlane._id, title: swimlane.title };
+          }
+
+          if (includeComments) {
+            detailedCard.comments = comments.map((c: WekanComment) => ({
+              id: c._id,
+              text: c.text || c.comment || '',
+              authorId: c.authorId || c.userId || '',
+              createdAt: c.createdAt || ''
+            }));
+          }
+
+          results.push(detailedCard);
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get my pending cards (Backlog* and Em Desenvolvimento lists)
+   * This is the most useful method for daily workflow
+   */
+  async getMyPendingCards(
+    userId: string,
+    options: {
+      boardName?: string;
+      includeComments?: boolean;
+    } = {}
+  ): Promise<DetailedCard[]> {
+    const { boardName, includeComments = false } = options;
+    const results: DetailedCard[] = [];
+
+    // Get all boards
+    let boards = await this.listBoards(userId);
+
+    // Filter by board name if provided
+    if (boardName) {
+      const lowerBoardName = boardName.toLowerCase();
+      boards = boards.filter((b: WekanBoard) => b.title.toLowerCase().includes(lowerBoardName));
+      if (boards.length === 0) {
+        return [];
+      }
+    }
+
+    // Process each board
+    for (const board of boards) {
+      const [lists, swimlanes, customFieldDefs] = await Promise.all([
+        this.listLists(board._id),
+        this.listSwimlanes(board._id),
+        this.getCustomFields(board._id)
+      ]);
+
+      // Create lookup maps
+      const swimlaneMap = new Map(swimlanes.map((s: WekanSwimlane) => [s._id, s]));
+      const fieldIdToName: Record<string, string> = {};
+      customFieldDefs.forEach((cf: WekanCustomField) => {
+        fieldIdToName[cf._id] = cf.name;
+      });
+
+      // Filter lists: starts with "Backlog" OR equals "Em Desenvolvimento"
+      const pendingLists = lists.filter((l: WekanList) => {
+        const lowerTitle = l.title.toLowerCase();
+        return lowerTitle.startsWith('backlog') || lowerTitle === 'em desenvolvimento';
+      });
+
+      if (pendingLists.length === 0) {
+        continue;
+      }
+
+      // Get cards from pending lists
+      for (const list of pendingLists) {
+        const cards = await this.listCards(board._id, list._id);
+
+        for (const card of cards) {
+          // Filter by current user
+          const cardAssignees = card['assignees'] as string[] || [];
+          if (!cardAssignees.includes(userId)) {
+            continue;
+          }
+
+          // Get full card details
+          const fullCard = await this.getCard(board._id, list._id, card._id);
+
+          // Get comments if requested
+          let comments: WekanComment[] = [];
+          if (includeComments) {
+            comments = await this.getCardComments(board._id, card._id).catch(() => []);
+          }
+
+          // Map custom fields
+          const mappedCustomFields: Record<string, any> = {};
+          const fullCardCustomFields = fullCard['customFields'] as Array<{_id: string; value: any}> | undefined;
+          if (fullCardCustomFields) {
+            for (const cf of fullCardCustomFields) {
+              const fieldName = fieldIdToName[cf._id] || cf._id;
+              mappedCustomFields[fieldName] = cf.value;
+            }
+          }
+
+          const swimlaneId = fullCard.swimlaneId || fullCard['swimlaneId'];
+          const swimlane = swimlaneId ? swimlaneMap.get(swimlaneId) : undefined;
+
+          const detailedCard: DetailedCard = {
+            id: fullCard._id,
+            title: fullCard.title,
+            description: fullCard.description || '',
+            board: { id: board._id, title: board.title },
+            list: { id: list._id, title: list.title },
+            assignees: fullCard['assignees'] || [],
+            startAt: fullCard['startAt'],
+            endAt: fullCard['endAt'],
+            dueAt: fullCard['dueAt'],
+            createdAt: fullCard['createdAt'],
+            customFields: mappedCustomFields
+          };
+
+          if (swimlane) {
+            detailedCard.swimlane = { id: swimlane._id, title: swimlane.title };
+          }
+
+          if (includeComments) {
+            detailedCard.comments = comments.map((c: WekanComment) => ({
+              id: c._id,
+              text: c.text || c.comment || '',
+              authorId: c.authorId || c.userId || '',
+              createdAt: c.createdAt || ''
+            }));
+          }
+
+          results.push(detailedCard);
+        }
+      }
+    }
+
+    return results;
+  }
 }
