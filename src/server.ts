@@ -192,6 +192,21 @@ server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*' or 
   return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
 });
 
+// ============================================
+// Update tools
+// ============================================
+
+server.tool("updateCardField", "Update a custom field on a card. Use this to fill fields like Downstream, Upstream, Planejamento, Manual de Planejamento, PR, etc.", {
+  boardName: z.string().describe("The board name (partial match, case-insensitive)"),
+  cardTitle: z.string().describe("The card title (partial match, case-insensitive)"),
+  fieldName: z.string().describe("The custom field name to update (e.g., 'Downstream', 'Upstream', 'Planejamento', 'PR')"),
+  value: z.string().describe("The new value for the field")
+}, async (args) => {
+  const { boardName, cardTitle, fieldName, value } = args;
+  const result = await wekan.updateCardFieldByName(USER_ID, boardName, cardTitle, fieldName, value);
+  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+});
+
 // Start transport
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -670,4 +670,100 @@ export class Wekan {
 
     return results;
   }
+
+  // ============================================
+  // Update methods
+  // ============================================
+
+  /**
+   * Update a custom field value on a card by field name
+   * This is the main method for updating card fields like Downstream, Upstream, Planejamento, etc.
+   */
+  async updateCardField(
+    boardId: string,
+    listId: string,
+    cardId: string,
+    fieldName: string,
+    value: any
+  ): Promise<{ success: boolean; message: string }> {
+    // Get current card details
+    const card = await this.getCard(boardId, listId, cardId);
+
+    // Get custom field definitions to map name to ID
+    const customFieldDefs = await this.getCustomFields(boardId);
+    const fieldDef = customFieldDefs.find((cf: WekanCustomField) =>
+      cf.name.toLowerCase() === fieldName.toLowerCase()
+    );
+
+    if (!fieldDef) {
+      return {
+        success: false,
+        message: `Custom field not found: ${fieldName}. Available fields: ${customFieldDefs.map((cf: WekanCustomField) => cf.name).join(', ')}`
+      };
+    }
+
+    // Get current custom fields from card
+    const currentCustomFields = (card['customFields'] as Array<{_id: string; value: any}>) || [];
+
+    // Update or add the field
+    let fieldFound = false;
+    const updatedCustomFields = currentCustomFields.map(cf => {
+      if (cf._id === fieldDef._id) {
+        fieldFound = true;
+        return { _id: cf._id, value: value };
+      }
+      return { _id: cf._id, value: cf.value };
+    });
+
+    // If field wasn't in card's custom fields, add it
+    if (!fieldFound) {
+      updatedCustomFields.push({ _id: fieldDef._id, value: value });
+    }
+
+    // Send PUT request to update card
+    await this.put(`/api/boards/${boardId}/lists/${listId}/cards/${cardId}`, {
+      customFields: updatedCustomFields
+    });
+
+    return {
+      success: true,
+      message: `Field "${fieldName}" updated successfully`
+    };
+  }
+
+  /**
+   * Update a custom field by card title (name-based, more agent-friendly)
+   */
+  async updateCardFieldByName(
+    userId: string,
+    boardName: string,
+    cardTitle: string,
+    fieldName: string,
+    value: any
+  ): Promise<{ success: boolean; message: string; card?: { id: string; title: string } }> {
+    // Find board
+    const board = await this.findBoardByName(userId, boardName);
+    if (!board) {
+      return { success: false, message: `Board not found: ${boardName}` };
+    }
+
+    // Search for card in all lists
+    const lists = await this.listLists(board._id);
+    const lowerCardTitle = cardTitle.toLowerCase();
+
+    for (const list of lists) {
+      const cards = await this.listCards(board._id, list._id);
+      const foundCard = cards.find((c: any) => c.title.toLowerCase().includes(lowerCardTitle));
+
+      if (foundCard) {
+        const result = await this.updateCardField(board._id, list._id, foundCard._id, fieldName, value);
+        return {
+          ...result,
+          card: { id: foundCard._id, title: foundCard.title }
+        };
+      }
+    }
+
+    return { success: false, message: `Card not found: ${cardTitle}` };
+  }
 }
