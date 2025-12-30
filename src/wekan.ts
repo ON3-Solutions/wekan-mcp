@@ -731,39 +731,4 @@ export class Wekan {
     };
   }
 
-  /**
-   * Update a custom field by card title (name-based, more agent-friendly)
-   */
-  async updateCardFieldByName(
-    userId: string,
-    boardName: string,
-    cardTitle: string,
-    fieldName: string,
-    value: any
-  ): Promise<{ success: boolean; message: string; card?: { id: string; title: string } }> {
-    // Find board
-    const board = await this.findBoardByName(userId, boardName);
-    if (!board) {
-      return { success: false, message: `Board not found: ${boardName}` };
-    }
-
-    // Search for card in all lists
-    const lists = await this.listLists(board._id);
-    const lowerCardTitle = cardTitle.toLowerCase();
-
-    for (const list of lists) {
-      const cards = await this.listCards(board._id, list._id);
-      const foundCard = cards.find((c: any) => c.title.toLowerCase().includes(lowerCardTitle));
-
-      if (foundCard) {
-        const result = await this.updateCardField(board._id, list._id, foundCard._id, fieldName, value);
-        return {
-          ...result,
-          card: { id: foundCard._id, title: foundCard.title }
-        };
-      }
-    }
-
-    return { success: false, message: `Card not found: ${cardTitle}` };
-  }
 }

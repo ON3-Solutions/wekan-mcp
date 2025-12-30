@@ -196,14 +196,15 @@ server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*' or 
 // Update tools
 // ============================================
 
-server.tool("updateCardField", "Update a custom field on a card. Use this to fill fields like Downstream, Upstream, Planejamento, Manual de Planejamento, PR, etc.", {
-  boardName: z.string().describe("The board name (partial match, case-insensitive)"),
-  cardTitle: z.string().describe("The card title (partial match, case-insensitive)"),
+server.tool("updateCardField", "Update a custom field on a card. Use IDs from getMyCards/getMyPendingCards. Fields: Downstream, Upstream, Planejamento, Manual de Planejamento, PR, etc.", {
+  boardId: z.string().describe("The board ID (from card.board.id)"),
+  listId: z.string().describe("The list ID (from card.list.id)"),
+  cardId: z.string().describe("The card ID (from card.id)"),
   fieldName: z.string().describe("The custom field name to update (e.g., 'Downstream', 'Upstream', 'Planejamento', 'PR')"),
   value: z.string().describe("The new value for the field")
 }, async (args) => {
-  const { boardName, cardTitle, fieldName, value } = args;
-  const result = await wekan.updateCardFieldByName(USER_ID, boardName, cardTitle, fieldName, value);
+  const { boardId, listId, cardId, fieldName, value } = args;
+  const result = await wekan.updateCardField(boardId, listId, cardId, fieldName, value);
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 });
 
