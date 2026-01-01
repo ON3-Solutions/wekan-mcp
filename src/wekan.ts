@@ -776,6 +776,64 @@ export class Wekan {
   }
 
   /**
+   * Move a card to another list using only cardId and list name.
+   * Automatically finds the board and current list.
+   */
+  async moveCardToList(
+    userId: string,
+    cardId: string,
+    destListName: string
+  ): Promise<{ ok: boolean; message: string; fromList?: string; toList?: string }> {
+    // Search through all boards to find the card
+    const boards = await this.listBoards(userId);
+
+    for (const board of boards) {
+      const lists = await this.listLists(board._id);
+      for (const list of lists) {
+        const cards = await this.listCards(board._id, list._id);
+        const found = cards.find((c: WekanCard) => c._id === cardId);
+        if (found) {
+          // Found the card! Now find the destination list by name
+          const lowerDestName = destListName.toLowerCase();
+          const destList = lists.find((l: WekanList) =>
+            l.title.toLowerCase().includes(lowerDestName)
+          );
+
+          if (!destList) {
+            const availableLists = lists.map((l: WekanList) => l.title).join(', ');
+            return {
+              ok: false,
+              message: `List not found: "${destListName}". Available lists: ${availableLists}`
+            };
+          }
+
+          // Check if already in destination list
+          if (list._id === destList._id) {
+            return {
+              ok: true,
+              message: `Card is already in list "${destList.title}"`,
+              fromList: list.title,
+              toList: destList.title
+            };
+          }
+
+          // Move the card
+          await this.moveCard(board._id, list._id, cardId, { listId: destList._id });
+
+          return {
+            ok: true,
+            message: `Card moved successfully`,
+            fromList: list.title,
+            toList: destList.title
+          };
+        }
+      }
+    }
+
+    return { ok: false, message: `Card not found: ${cardId}` };
+  }
+
+  /**
    * Update a custom field value on a card by field name
    * This is the main method for updating card fields like Downstream, Upstream, Planejamento, etc.
    */

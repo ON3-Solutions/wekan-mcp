@@ -84,19 +84,13 @@ server.tool("createCard", "Create a card", {
   return { content: [{ type: "text", text: JSON.stringify({ id: card._id, title: card.title }) }] };
 });
 
-server.tool("moveCard", "Move a card to another list or swimlane", {
-  boardId: z.string(),
-  fromListId: z.string(),
-  cardId: z.string(),
-  listId: z.string().optional(),
-  swimlaneId: z.string().optional()
+server.tool("moveCard", "Move a card to another list. Only requires cardId and list name - board and current list are found automatically.", {
+  cardId: z.string().describe("The card ID (from card.id in getMyPendingCards/getMyCards)"),
+  listName: z.string().describe("The destination list name (partial match, case-insensitive). Examples: 'Em Desenvolvimento', 'Backlog', 'Merge'")
 }, async (args) => {
-  const { boardId, fromListId, cardId, listId, swimlaneId } = args;
-  const payload: any = {};
-  if (listId) payload.listId = listId;
-  if (swimlaneId) payload.swimlaneId = swimlaneId;
-  const card = await wekan.moveCard(boardId, fromListId, cardId, payload);
-  return { content: [{ type: "text", text: JSON.stringify({ id: card._id, listId: card.listId, swimlaneId: card.swimlaneId }) }] };
+  const { cardId, listName } = args;
+  const result = await wekan.moveCardToList(USER_ID, cardId, listName);
+  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 });
 
 server.tool("addCardComment", "Add a comment to a card. Only requires cardId - the board is found automatically.", {
