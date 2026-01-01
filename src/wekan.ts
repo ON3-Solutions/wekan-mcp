@@ -61,6 +61,12 @@ export interface WekanCustomField {
 }
 
 // Aggregated types for rich responses
+export interface CardComment {
+  id: string;
+  author: string;
+  text: string;
+}
+
 export interface DetailedCard {
   id: string;
   title: string;
@@ -74,7 +80,7 @@ export interface DetailedCard {
   dueAt?: string;
   createdAt?: string;
   customFields: Record<string, any>;
-  comments?: Array<{ id: string; text: string; authorId: string; createdAt: string }>;
+  comments?: CardComment[];
 }
 
 export interface BoardOverview {
@@ -87,7 +93,8 @@ export interface BoardOverview {
 
 export class Wekan {
   private token: string | null = null;
-  
+  private userCache: Map<string, string> = new Map(); // userId -> username
+
   constructor(private opts: WekanClientOpts) {}
   
   private async authenticate(): Promise<string> {
@@ -177,6 +184,52 @@ export class Wekan {
   createCard(boardId: string, listId: string, body: any): Promise<WekanCard> { return this.post(`/api/boards/${boardId}/lists/${listId}/cards`, body); }
   moveCard(boardId: string, fromListId: string, cardId: string, body: any): Promise<WekanCard> { return this.put(`/api/boards/${boardId}/lists/${fromListId}/cards/${cardId}`, body); }
   commentCard(boardId: string, cardId: string, authorId: string, comment: string): Promise<WekanComment> { return this.post(`/api/boards/${boardId}/cards/${cardId}/comments`, { authorId, comment }); }
+
+  /**
+   * Load all users into cache (call once to populate)
+   */
+  async loadUsersCache(): Promise<void> {
+    if (this.userCache.size > 0) return; // Already loaded
+
+    try {
+      const users = await this.get('/api/users');
+      if (Array.isArray(users)) {
+        for (const user of users) {
+          const name = user.profile?.fullname || user.username || user._id;
+          this.userCache.set(user._id, name);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load users cache:', e);
+    }
+  }
+
+  /**
+   * Get username by userId (with in-memory cache to avoid repeated API calls)
+   */
+  async getUsername(userId: string): Promise<string> {
+    if (!userId) return 'Unknown';
+
+    // Ensure cache is loaded
+    await this.loadUsersCache();
+
+    // Check cache
+    if (this.userCache.has(userId)) {
+      return this.userCache.get(userId)!;
+    }
+
+    // If not in cache, try individual lookup as fallback
+    try {
+      const user = await this.get(`/api/users/${userId}`);
+      const name = user.profile?.fullname || user.username || userId;
+      this.userCache.set(userId, name);
+      return name;
+    } catch {
+      // If we can't get user details, cache the ID itself
+      this.userCache.set(userId, userId);
+      return userId;
+    }
+  }
 
   // ============================================
   // Aggregated methods - simplify agent workflows
@@ -271,12 +324,15 @@ export class Wekan {
     }
 
     if (includeComments) {
-      result.comments = comments.map((c: WekanComment) => ({
-        id: c._id,
-        text: c.text || c.comment || '',
-        authorId: c.authorId || c.userId || '',
-        createdAt: c.createdAt || ''
-      }));
+      // API returns comments newest-first, reverse to get oldest-first (chronological order)
+      const sortedComments = [...comments].reverse();
+      result.comments = await Promise.all(
+        sortedComments.map(async (c: WekanComment) => ({
+          id: c._id,
+          author: await this.getUsername(c.authorId || c.userId || ''),
+          text: c.text || c.comment || ''
+        }))
+      );
     }
 
     return result;
@@ -380,12 +436,15 @@ export class Wekan {
           }
 
           if (includeComments) {
-            detailedCard.comments = comments.map((c: WekanComment) => ({
-              id: c._id,
-              text: c.text || c.comment || '',
-              authorId: c.authorId || c.userId || '',
-              createdAt: c.createdAt || ''
-            }));
+            // API returns comments newest-first, reverse to get oldest-first (chronological order)
+            const sortedComments = [...comments].reverse();
+            detailedCard.comments = await Promise.all(
+              sortedComments.map(async (c: WekanComment) => ({
+                id: c._id,
+                author: await this.getUsername(c.authorId || c.userId || ''),
+                text: c.text || c.comment || ''
+              }))
+            );
           }
 
           results.push(detailedCard);
@@ -536,12 +595,15 @@ export class Wekan {
           }
 
           if (includeComments) {
-            detailedCard.comments = comments.map((c: WekanComment) => ({
-              id: c._id,
-              text: c.text || c.comment || '',
-              authorId: c.authorId || c.userId || '',
-              createdAt: c.createdAt || ''
-            }));
+            // API returns comments newest-first, reverse to get oldest-first (chronological order)
+            const sortedComments = [...comments].reverse();
+            detailedCard.comments = await Promise.all(
+              sortedComments.map(async (c: WekanComment) => ({
+                id: c._id,
+                author: await this.getUsername(c.authorId || c.userId || ''),
+                text: c.text || c.comment || ''
+              }))
+            );
           }
 
           results.push(detailedCard);
@@ -555,15 +617,15 @@ export class Wekan {
   /**
    * Get my pending cards (Backlog* and Em Desenvolvimento lists)
    * This is the most useful method for daily workflow
+   * Always includes comments with author names (not IDs)
    */
   async getMyPendingCards(
     userId: string,
     options: {
       boardName?: string;
-      includeComments?: boolean;
     } = {}
   ): Promise<DetailedCard[]> {
-    const { boardName, includeComments = false } = options;
+    const { boardName } = options;
     const results: DetailedCard[] = [];
 
     // Get all boards
@@ -614,14 +676,21 @@ export class Wekan {
             continue;
           }
 
-          // Get full card details
-          const fullCard = await this.getCard(board._id, list._id, card._id);
+          // Get full card details and comments in parallel
+          const [fullCard, rawComments] = await Promise.all([
+            this.getCard(board._id, list._id, card._id),
+            this.getCardComments(board._id, card._id).catch(() => [])
+          ]);
 
-          // Get comments if requested
-          let comments: WekanComment[] = [];
-          if (includeComments) {
-            comments = await this.getCardComments(board._id, card._id).catch(() => []);
-          }
+          // API returns comments newest-first, reverse to get oldest-first (chronological order)
+          const sortedRawComments = [...rawComments].reverse();
+          const comments: CardComment[] = await Promise.all(
+            sortedRawComments.map(async (c: WekanComment) => ({
+              id: c._id,
+              author: await this.getUsername(c.authorId || c.userId || ''),
+              text: c.text || c.comment || ''
+            }))
+          );
 
           // Map custom fields
           const mappedCustomFields: Record<string, any> = {};
@@ -647,20 +716,12 @@ export class Wekan {
             endAt: fullCard['endAt'],
             dueAt: fullCard['dueAt'],
             createdAt: fullCard['createdAt'],
-            customFields: mappedCustomFields
+            customFields: mappedCustomFields,
+            comments
           };
 
           if (swimlane) {
             detailedCard.swimlane = { id: swimlane._id, title: swimlane.title };
-          }
-
-          if (includeComments) {
-            detailedCard.comments = comments.map((c: WekanComment) => ({
-              id: c._id,
-              text: c.text || c.comment || '',
-              authorId: c.authorId || c.userId || '',
-              createdAt: c.createdAt || ''
-            }));
           }
 
           results.push(detailedCard);
@@ -674,6 +735,34 @@ export class Wekan {
   // ============================================
   // Update methods
   // ============================================
+
+  /**
+   * Add a comment to a card using only the cardId (finds boardId automatically)
+   * This simplifies the agent workflow - no need to know the boardId
+   */
+  async addCommentByCardId(
+    userId: string,
+    cardId: string,
+    comment: string
+  ): Promise<{ ok: boolean; commentId?: string; error?: string }> {
+    // Search through all boards to find the card
+    const boards = await this.listBoards(userId);
+
+    for (const board of boards) {
+      const lists = await this.listLists(board._id);
+      for (const list of lists) {
+        const cards = await this.listCards(board._id, list._id);
+        const found = cards.find((c: WekanCard) => c._id === cardId);
+        if (found) {
+          // Found the card! Add the comment
+          const res = await this.commentCard(board._id, cardId, userId, comment);
+          return { ok: true, commentId: res._id };
+        }
+      }
+    }
+
+    return { ok: false, error: `Card not found: ${cardId}` };
+  }
 
   /**
    * Update a custom field value on a card by field name

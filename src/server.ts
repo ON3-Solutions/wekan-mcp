@@ -99,14 +99,13 @@ server.tool("moveCard", "Move a card to another list or swimlane", {
   return { content: [{ type: "text", text: JSON.stringify({ id: card._id, listId: card.listId, swimlaneId: card.swimlaneId }) }] };
 });
 
-server.tool("commentCard", "Add a comment to a card", {
-  boardId: z.string(),
-  cardId: z.string(),
-  comment: z.string().min(1)
+server.tool("addCardComment", "Add a comment to a card. Only requires cardId - the board is found automatically.", {
+  cardId: z.string().describe("The card ID (from card.id in getMyPendingCards/getMyCards)"),
+  comment: z.string().min(1).describe("The comment text to add")
 }, async (args) => {
-  const { boardId, cardId, comment } = args;
-  const res = await wekan.commentCard(boardId, cardId, USER_ID, comment);
-  return { content: [{ type: "text", text: JSON.stringify({ ok: true, commentId: res._id }) }] };
+  const { cardId, comment } = args;
+  const result = await wekan.addCommentByCardId(USER_ID, cardId, comment);
+  return { content: [{ type: "text", text: JSON.stringify(result) }] };
 });
 
 // ============================================
@@ -181,12 +180,11 @@ server.tool("getMyCards", "Get all cards assigned to me with full details. This 
   return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
 });
 
-server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*' or 'Em Desenvolvimento' lists. This is the BEST tool for daily workflow to see what needs to be done.", {
-  boardName: z.string().optional().describe("Filter by board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'"),
-  includeComments: z.boolean().optional().describe("Include comments for each card (default: false)")
+server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*' or 'Em Desenvolvimento' lists. Always includes comments with author names. This is the BEST tool for daily workflow.", {
+  boardName: z.string().optional().describe("Filter by board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'")
 }, async (args) => {
-  const { boardName, includeComments = false } = args;
-  const options: { boardName?: string; includeComments?: boolean } = { includeComments };
+  const { boardName } = args;
+  const options: { boardName?: string } = {};
   if (boardName) options.boardName = boardName;
   const cards = await wekan.getMyPendingCards(USER_ID, options);
   return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
