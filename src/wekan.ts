@@ -186,7 +186,9 @@ export class Wekan {
   commentCard(boardId: string, cardId: string, authorId: string, comment: string): Promise<WekanComment> { return this.post(`/api/boards/${boardId}/cards/${cardId}/comments`, { authorId, comment }); }
 
   /**
-   * Load all users into cache (call once to populate)
+   * Load all users into cache with their full names (call once to populate)
+   * The /api/users endpoint only returns _id and username, so we need to
+   * fetch each user individually to get profile.fullname
    */
   async loadUsersCache(): Promise<void> {
     if (this.userCache.size > 0) return; // Already loaded
@@ -194,10 +196,19 @@ export class Wekan {
     try {
       const users = await this.get('/api/users');
       if (Array.isArray(users)) {
-        for (const user of users) {
-          const name = user.profile?.fullname || user.username || user._id;
-          this.userCache.set(user._id, name);
-        }
+        // Fetch full details for each user to get profile.fullname
+        await Promise.all(
+          users.map(async (user: { _id: string; username: string }) => {
+            try {
+              const fullUser = await this.get(`/api/users/${user._id}`);
+              const name = fullUser.profile?.fullname || fullUser.username || user._id;
+              this.userCache.set(user._id, name);
+            } catch {
+              // Fallback to username if individual fetch fails
+              this.userCache.set(user._id, user.username || user._id);
+            }
+          })
+        );
       }
     } catch (e) {
       console.error('Failed to load users cache:', e);
