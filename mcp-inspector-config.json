@@ -16,8 +16,8 @@
       "args": ["dist/server.js"],
       "env": {
         "WEKAN_BASE_URL": "https://wekan.uan.com.br",
-        "WEKAN_API_TOKEN": "your-token-from-get-wekan-token-script",
-        "WEKAN_USER_ID": "your-user-id-from-get-wekan-token-script"
+        "WEKAN_API_TOKEN": "88maf3PteMjb9vSpI2WGjhcOwr461rlqwSiuRNS1rw1",
+        "WEKAN_USER_ID": "XvR5MTWzozNxQwnJB"
       },
       "transport": "stdio"
     }

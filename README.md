@@ -32,9 +32,9 @@ Run the appropriate script for your platform to generate your API token:
 ```
 
 The script will prompt you for:
-- Wekan endpoint (e.g., https://wekan.namar0x0309.com)
-- Username
-- Password
+- Wekan endpoint (e.g., https://wekan.uan.com.br)
+- Username (e.g., jarbas)
+- Password (e.g., VN2k8bD2iKUCVCm)
 
 After successful authentication, it will:
 1. Generate an API token
