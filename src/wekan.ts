@@ -626,7 +626,7 @@ export class Wekan {
   }
 
   /**
-   * Get my pending cards (Backlog* and Em Desenvolvimento lists)
+   * Get my pending cards (Backlog*, Em Desenvolvimento, and Merge lists)
    * This is the most useful method for daily workflow
    * Always includes comments with author names (not IDs)
    */
@@ -666,10 +666,10 @@ export class Wekan {
         fieldIdToName[cf._id] = cf.name;
       });
 
-      // Filter lists: starts with "Backlog" OR equals "Em Desenvolvimento"
+      // Filter lists: starts with "Backlog" OR equals "Em Desenvolvimento" OR equals "Merge"
       const pendingLists = lists.filter((l: WekanList) => {
         const lowerTitle = l.title.toLowerCase();
-        return lowerTitle.startsWith('backlog') || lowerTitle === 'em desenvolvimento';
+        return lowerTitle.startsWith('backlog') || lowerTitle === 'em desenvolvimento' || lowerTitle === 'merge';
       });
 
       if (pendingLists.length === 0) {
