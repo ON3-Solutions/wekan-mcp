@@ -724,6 +724,11 @@ export class Wekan {
             }
           }
 
+          // Skip card if both 'uuid' and 'PR' fields are filled (work is complete)
+          if (mappedCustomFields['uuid'] && mappedCustomFields['PR']) {
+            continue;
+          }
+
           const swimlaneId = fullCard.swimlaneId || fullCard['swimlaneId'];
           const swimlane = swimlaneId ? swimlaneMap.get(swimlaneId) : undefined;
 
