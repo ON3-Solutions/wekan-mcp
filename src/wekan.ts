@@ -724,8 +724,9 @@ export class Wekan {
             }
           }
 
-          // Skip card if both 'uuid' and 'PR' fields are filled (work is complete)
-          if (mappedCustomFields['uuid'] && mappedCustomFields['PR']) {
+          // Skip card if no comments AND both 'uuid' and 'PR' fields are filled (work is complete)
+          // This rule only applies when there are no comments - if there are comments, the last comment rule takes precedence
+          if (sortedRawComments.length === 0 && mappedCustomFields['uuid'] && mappedCustomFields['PR']) {
             continue;
           }
 

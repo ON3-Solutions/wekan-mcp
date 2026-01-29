@@ -174,7 +174,7 @@ server.tool("getMyCards", "Get all cards assigned to me with full details. This 
   return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
 });
 
-server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*', 'Em Desenvolvimento' or 'Merge' lists where I need to take action (no comments yet OR last comment is not mine) and work is not complete (uuid+PR not both filled). Always includes comments with author names. This is the BEST tool for daily workflow.", {
+server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*', 'Em Desenvolvimento' or 'Merge' lists where I need to take action. Excludes cards where: last comment is mine (waiting for response) OR no comments but uuid+PR both filled (work complete). Always includes comments with author names. This is the BEST tool for daily workflow.", {
   boardName: z.string().optional().describe("Filter by board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'")
 }, async (args) => {
   const { boardName } = args;
