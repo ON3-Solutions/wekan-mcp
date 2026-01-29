@@ -174,7 +174,7 @@ server.tool("getMyCards", "Get all cards assigned to me with full details. This 
   return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
 });
 
-server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*' or 'Em Desenvolvimento' lists. Always includes comments with author names. This is the BEST tool for daily workflow.", {
+server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*', 'Em Desenvolvimento' or 'Merge' lists where I need to take action (no comments yet OR last comment is not mine). Always includes comments with author names. This is the BEST tool for daily workflow.", {
   boardName: z.string().optional().describe("Filter by board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'")
 }, async (args) => {
   const { boardName } = args;

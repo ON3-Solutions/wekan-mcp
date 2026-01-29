@@ -695,6 +695,17 @@ export class Wekan {
 
           // API returns comments newest-first, reverse to get oldest-first (chronological order)
           const sortedRawComments = [...rawComments].reverse();
+
+          // Check if last comment was from the connected user - if so, skip this card
+          // (user is waiting for someone else to respond)
+          if (sortedRawComments.length > 0) {
+            const lastComment = sortedRawComments[sortedRawComments.length - 1]!;
+            const lastCommentAuthorId = lastComment.authorId || lastComment.userId || '';
+            if (lastCommentAuthorId === userId) {
+              continue;
+            }
+          }
+
           const comments: CardComment[] = await Promise.all(
             sortedRawComments.map(async (c: WekanComment) => ({
               id: c._id,
