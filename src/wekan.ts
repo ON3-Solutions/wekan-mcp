@@ -81,6 +81,7 @@ export interface DetailedCard {
   createdAt?: string;
   customFields: Record<string, any>;
   comments?: CardComment[];
+  createdBy?: { id: string; name: string };
 }
 
 export interface BoardOverview {
@@ -733,6 +734,10 @@ export class Wekan {
           const swimlaneId = fullCard.swimlaneId || fullCard['swimlaneId'];
           const swimlane = swimlaneId ? swimlaneMap.get(swimlaneId) : undefined;
 
+          // Get card creator info
+          const creatorId = fullCard['userId'] as string | undefined;
+          const creatorName = creatorId ? await this.getUsername(creatorId) : 'Unknown';
+
           const detailedCard: DetailedCard = {
             id: fullCard._id,
             title: fullCard.title,
@@ -747,6 +752,10 @@ export class Wekan {
             customFields: mappedCustomFields,
             comments
           };
+
+          if (creatorId) {
+            detailedCard.createdBy = { id: creatorId, name: creatorName };
+          }
 
           if (swimlane) {
             detailedCard.swimlane = { id: swimlane._id, title: swimlane.title };
