@@ -30,6 +30,12 @@ const server = new McpServer(
 );
 
 // Register tools
+
+// ============================================
+// Unused tools - commented out to save tokens
+// ============================================
+
+/*
 server.tool("listBoards", "List accessible Wekan boards", {}, async () => {
   const boards = await wekan.listBoards(USER_ID);
   return { content: [{ type: "text", text: JSON.stringify(boards.map((b) => ({ id: b._id, title: b.title })))}] };
@@ -83,6 +89,11 @@ server.tool("createCard", "Create a card", {
   const card = await wekan.createCard(boardId, listId, body);
   return { content: [{ type: "text", text: JSON.stringify({ id: card._id, title: card.title }) }] };
 });
+*/
+
+// ============================================
+// Active tools - used by jarbas-dev
+// ============================================
 
 server.tool("moveCard", "Move a card to another list. Only requires cardId and list name - board and current list are found automatically.", {
   cardId: z.string().describe("The card ID (from card.id in getMyPendingCards/getMyCards)"),
@@ -103,9 +114,10 @@ server.tool("addCardComment", "Add a comment to a card. Only requires cardId - t
 });
 
 // ============================================
-// Aggregated tools - simplify agent workflows
+// Unused aggregated tools - commented out to save tokens
 // ============================================
 
+/*
 server.tool("getBoardOverview", "Get complete board overview with lists, swimlanes, custom fields, and card counts. Use this to understand the board structure before working with cards.", {
   boardName: z.string().describe("The board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'")
 }, async (args) => {
@@ -173,6 +185,11 @@ server.tool("getMyCards", "Get all cards assigned to me with full details. This 
   const cards = await wekan.getMyCardsByName(USER_ID, options);
   return { content: [{ type: "text", text: JSON.stringify(cards, null, 2) }] };
 });
+*/
+
+// ============================================
+// Active aggregated tools - used by jarbas-dev
+// ============================================
 
 server.tool("getMyPendingCards", "Get my pending cards - those in 'Backlog*', 'Em Desenvolvimento' or 'Merge' lists where I need to take action. Excludes cards where: last comment is mine (waiting for response) OR no comments but uuid+PR both filled (work complete). Always includes comments with author names. This is the BEST tool for daily workflow.", {
   boardName: z.string().optional().describe("Filter by board name (partial match, case-insensitive). Example: 'uan' matches 'uan®'")
