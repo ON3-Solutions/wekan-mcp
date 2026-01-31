@@ -197,13 +197,13 @@ try {
             // Obtém detalhes completos do card
             const fullCard = await wekan.getCard(board._id, mergeList._id, card._id);
 
-            console.log(`[INFO]   Verificando card: ${card.title} (ID: ${card._id})`);
+            console.log(`[INFO]     Verificando card: ${card.title} (ID: ${card._id})`);
 
             // Extrai valor do campo PR
             const prUrl = getCustomFieldValue(fullCard.customFields, customFields, 'PR');
 
             if (!prUrl) {
-                console.log(`[INFO]     Campo PR vazio - pulando`);
+                console.log(`[INFO]       Campo PR vazio - pulando`);
                 skippedCards++;
                 continue;
             }
@@ -212,12 +212,12 @@ try {
             const prUrls = extractPrUrls(prUrl);
 
             if (prUrls.length === 0) {
-                console.log(`[INFO]     Campo PR não contém URLs válidas: "${prUrl}"`);
+                console.log(`[INFO]       Campo PR não contém URLs válidas: "${prUrl}"`);
                 skippedCards++;
                 continue;
             }
 
-            console.log(`[INFO]     ${prUrls.length} PR(s) encontrada(s):`);
+            console.log(`[INFO]       ${prUrls.length} PR(s) encontrada(s):`);
 
             // Verifica todas as PRs
             const { allMerged, results } = checkMultiplePrs(prUrls);
@@ -225,31 +225,31 @@ try {
             // Log detalhado de cada PR
             for (const { url, state } of results) {
                 const statusIcon = state === 'MERGED' ? '✓' : '✗';
-                console.log(`[INFO]       ${statusIcon} ${url} → ${state}`);
+                console.log(`[INFO]         ${statusIcon} ${url} → ${state}`);
             }
 
             if (allMerged) {
                 mergedCards++;
-                console.log(`[SUCCESS]     Todas as ${prUrls.length} PR(s) estão MERGED!`);
+                console.log(`[SUCCESS]       Todas as ${prUrls.length} PR(s) estão MERGED!`);
 
                 // Move o card para "Pendente de Testes"
-                console.log(`[INFO]     Movendo card para 'Pendente de Testes'...`);
+                console.log(`[INFO]       Movendo card para 'Pendente de Testes'...`);
 
                 try {
                     await wekan.moveCard(board._id, mergeList._id, card._id, {
                         listId: pendenteList._id
                     });
                     movedCards++;
-                    console.log(`[SUCCESS]     Card movido com sucesso!`);
+                    console.log(`[SUCCESS]       Card movido com sucesso!`);
                 } catch (err) {
-                    console.log(`[ERROR]     Falha ao mover card: ${err.message}`);
+                    console.log(`[ERROR]       Falha ao mover card: ${err.message}`);
                 }
             } else {
                 // Identifica quais PRs ainda não foram merged
                 const pendingPrs = results.filter(r => r.state !== 'MERGED');
-                console.log(`[INFO]     Card mantido na lista 'Merge' - ${pendingPrs.length} PR(s) pendente(s):`);
+                console.log(`[INFO]       Card mantido na lista 'Merge' - ${pendingPrs.length} PR(s) pendente(s):`);
                 for (const { url, state } of pendingPrs) {
-                    console.log(`[INFO]       - ${url} (${state})`);
+                    console.log(`[INFO]         - ${url} (${state})`);
                 }
                 skippedCards++;
             }
