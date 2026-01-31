@@ -76,6 +76,42 @@ function getPrState(prUrl) {
 }
 
 /**
+ * Extrai URLs de PRs de uma string (pode conter múltiplas URLs separadas por vírgula/espaço)
+ * @param {string} prField - Valor do campo PR
+ * @returns {Array<string>} - Array de URLs válidas de PRs
+ */
+function extractPrUrls(prField) {
+    if (!prField) return [];
+
+    // Regex para encontrar todas as URLs de PRs no GitHub
+    const prRegex = /https?:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/g;
+    const matches = prField.match(prRegex);
+
+    return matches || [];
+}
+
+/**
+ * Verifica o estado de múltiplas PRs
+ * @param {Array<string>} prUrls - Array de URLs de PRs
+ * @returns {{allMerged: boolean, results: Array<{url: string, state: string}>}}
+ */
+function checkMultiplePrs(prUrls) {
+    const results = [];
+    let allMerged = true;
+
+    for (const url of prUrls) {
+        const state = getPrState(url);
+        results.push({ url, state });
+
+        if (state !== 'MERGED') {
+            allMerged = false;
+        }
+    }
+
+    return { allMerged, results };
+}
+
+/**
  * Extrai o valor de um campo customizado pelo nome
  * @param {Array} cardCustomFields - Array de campos customizados do card
  * @param {Array} fieldDefinitions - Definições de campos do board
@@ -172,15 +208,29 @@ try {
                 continue;
             }
 
-            console.log(`[INFO]     URL do PR: ${prUrl}`);
+            // Extrai todas as URLs de PR do campo
+            const prUrls = extractPrUrls(prUrl);
 
-            // Verifica estado do PR
-            const prState = getPrState(prUrl);
-            console.log(`[INFO]     Estado do PR no GitHub: ${prState}`);
+            if (prUrls.length === 0) {
+                console.log(`[INFO]     Campo PR não contém URLs válidas: "${prUrl}"`);
+                skippedCards++;
+                continue;
+            }
 
-            if (prState === 'MERGED') {
+            console.log(`[INFO]     ${prUrls.length} PR(s) encontrada(s):`);
+
+            // Verifica todas as PRs
+            const { allMerged, results } = checkMultiplePrs(prUrls);
+
+            // Log detalhado de cada PR
+            for (const { url, state } of results) {
+                const statusIcon = state === 'MERGED' ? '✓' : '✗';
+                console.log(`[INFO]       ${statusIcon} ${url} → ${state}`);
+            }
+
+            if (allMerged) {
                 mergedCards++;
-                console.log(`[SUCCESS]     PR está MERGED!`);
+                console.log(`[SUCCESS]     Todas as ${prUrls.length} PR(s) estão MERGED!`);
 
                 // Move o card para "Pendente de Testes"
                 console.log(`[INFO]     Movendo card para 'Pendente de Testes'...`);
@@ -195,7 +245,12 @@ try {
                     console.log(`[ERROR]     Falha ao mover card: ${err.message}`);
                 }
             } else {
-                console.log(`[INFO]     PR não está merged (estado: ${prState}) - mantendo na lista Merge`);
+                // Identifica quais PRs ainda não foram merged
+                const pendingPrs = results.filter(r => r.state !== 'MERGED');
+                console.log(`[INFO]     Card mantido na lista 'Merge' - ${pendingPrs.length} PR(s) pendente(s):`);
+                for (const { url, state } of pendingPrs) {
+                    console.log(`[INFO]       - ${url} (${state})`);
+                }
                 skippedCards++;
             }
         }
