@@ -688,6 +688,11 @@ export class Wekan {
             continue;
           }
 
+          // Skip cards with empty description (not ready to be worked on)
+          if (!card.description || card.description.trim() === '') {
+            continue;
+          }
+
           // Get full card details and comments in parallel
           const [fullCard, rawComments] = await Promise.all([
             this.getCard(board._id, list._id, card._id),
