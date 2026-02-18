@@ -3,7 +3,7 @@
 /**
  * get-pending-cards-json.js
  *
- * Retorna os cards pendentes como JSON com metadados (id, boardId, listId, title).
+ * Retorna os cards pendentes como JSON com metadados (id, boardId, listId, title, uuid).
  *
  * Exit codes:
  *   0 - Sucesso (JSON impresso no stdout)
@@ -50,7 +50,8 @@ try {
         id: c.id,
         boardId: c.board.id,
         listId: c.list.id,
-        title: c.title
+        title: c.title,
+        uuid: c.customFields?.uuid || ""
     }));
     console.log(JSON.stringify(metadata));
     process.exit(0);
