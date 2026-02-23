@@ -17,6 +17,7 @@
 
 import { Wekan } from './dist/wekan.js';
 import { execSync } from 'child_process';
+import { extractPrUrls, getCustomFieldValue, isUserAssignedToCard } from './check-merged-prs-lib.js';
 
 // Configuração
 const BASE_URL = process.env["WEKAN_BASE_URL"]?.replace(/\/$/, "") || "";
@@ -76,21 +77,6 @@ function getPrState(prUrl) {
 }
 
 /**
- * Extrai URLs de PRs de uma string (pode conter múltiplas URLs separadas por vírgula/espaço)
- * @param {string} prField - Valor do campo PR
- * @returns {Array<string>} - Array de URLs válidas de PRs
- */
-function extractPrUrls(prField) {
-    if (!prField) return [];
-
-    // Regex para encontrar todas as URLs de PRs no GitHub
-    const prRegex = /https?:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/g;
-    const matches = prField.match(prRegex);
-
-    return matches || [];
-}
-
-/**
  * Verifica o estado de múltiplas PRs
  * @param {Array<string>} prUrls - Array de URLs de PRs
  * @returns {{allMerged: boolean, results: Array<{url: string, state: string}>}}
@@ -109,23 +95,6 @@ function checkMultiplePrs(prUrls) {
     }
 
     return { allMerged, results };
-}
-
-/**
- * Extrai o valor de um campo customizado pelo nome
- * @param {Array} cardCustomFields - Array de campos customizados do card
- * @param {Array} fieldDefinitions - Definições de campos do board
- * @param {string} fieldName - Nome do campo a buscar
- * @returns {string|null} - Valor do campo ou null
- */
-function getCustomFieldValue(cardCustomFields, fieldDefinitions, fieldName) {
-    if (!cardCustomFields || !fieldDefinitions) return null;
-
-    const fieldDef = fieldDefinitions.find(f => f.name === fieldName);
-    if (!fieldDef) return null;
-
-    const field = cardCustomFields.find(f => f._id === fieldDef._id);
-    return field?.value || null;
 }
 
 // Contadores
@@ -198,6 +167,13 @@ try {
             const fullCard = await wekan.getCard(board._id, mergeList._id, card._id);
 
             console.log(`[INFO]     Verificando card: ${card.title} (ID: ${card._id})`);
+
+            // Verifica se Jarbas (USER_ID) está nos assignees do card
+            if (!isUserAssignedToCard(fullCard, USER_ID)) {
+                console.log(`[INFO]       Jarbas não está nos assignees - pulando`);
+                skippedCards++;
+                continue;
+            }
 
             // Extrai valor do campo PR
             const prUrl = getCustomFieldValue(fullCard.customFields, customFields, 'PR');
