@@ -8,9 +8,10 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
-
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "inspect": "npx @modelcontextprotocol/inspector --config ./mcp-inspector-config.json --server wekan",
-
     "inspect:watch": "npm run build && npx @modelcontextprotocol/inspector --config ./mcp-inspector-config.json --server wekan"
   },
   "keywords": [],
@@ -24,7 +25,9 @@
   },
   "devDependencies": {
     "@types/node": "^24.9.2",
+    "@vitest/coverage-v8": "^4.0.18",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }
