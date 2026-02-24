@@ -31,7 +31,8 @@ A cobertura e configurada em `vitest.config.mts`. Os thresholds minimos sao:
 | Lines | 70% |
 
 Arquivos incluidos na cobertura:
-- `check-merged-prs-lib.js` - Funcoes puras de negocio
+- `check-merged-prs-lib.js` - Funcoes puras de negocio (PRs mergeadas)
+- `accumulate-tokens-lib.js` - Funcoes puras de negocio (acumulacao de tokens)
 
 ## Configuracao
 

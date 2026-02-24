@@ -22,6 +22,7 @@
  */
 
 import { Wekan } from './dist/wekan.js';
+import { findTokensField, getCurrentTokens, accumulateTokens } from './accumulate-tokens-lib.js';
 
 const BASE_URL = process.env["WEKAN_BASE_URL"]?.replace(/\/$/, "") || "";
 const TOKEN = process.env["WEKAN_API_TOKEN"] || "";
@@ -94,17 +95,16 @@ for (const card of cards) {
 
         // Busca definições de custom fields para encontrar "Tokens Consumidos"
         const customFieldDefs = await wekan.getCustomFields(card.boardId);
-        const tokenFieldDef = customFieldDefs.find(f => f.name.toLowerCase() === 'tokens consumidos');
+        const tokenFieldDef = findTokensField(customFieldDefs);
 
         if (!tokenFieldDef) {
             console.error(`Campo 'Tokens Consumidos' não encontrado no board ${card.boardId}.`);
             continue;
         }
 
-        // Lê valor atual do campo
-        const currentField = freshCard.customFields?.find(cf => cf._id === tokenFieldDef._id);
-        const currentValue = parseInt(currentField?.value || '0', 10) || 0;
-        const newValue = currentValue + perCardTokens;
+        // Lê valor atual e acumula
+        const currentValue = getCurrentTokens(freshCard.customFields, tokenFieldDef);
+        const newValue = accumulateTokens(currentValue, perCardTokens);
 
         // Atualiza o campo com o valor acumulado
         await wekan.updateCardField(card.boardId, currentListId, card.id, 'Tokens Consumidos', String(newValue));
