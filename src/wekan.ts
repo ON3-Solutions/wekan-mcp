@@ -134,7 +134,9 @@ export class Wekan {
 
   private async requestWithAuth(path: string, options: any): Promise<any> {
     const headers = await this.headers();
-    const maxRetries = 2;
+    const method = options.method || 'GET';
+    const isIdempotent = method === 'GET' || method === 'HEAD';
+    const maxRetries = isIdempotent ? 2 : 1;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const r = await request(`${this.opts.baseUrl}${path}`, {
@@ -146,17 +148,21 @@ export class Wekan {
         return r.body.json();
       }
 
-      // Retry on 5xx (server transient errors) if not last attempt
+      // Retry on 5xx (server transient errors) only for idempotent methods
       if (r.statusCode >= 500 && attempt < maxRetries) {
-        // Consume body to avoid memory leak
         await r.body.text().catch(() => {});
         const delay = attempt * 1000;
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
 
-      throw new Error(`${options.method || 'GET'} ${path} -> ${r.statusCode}`);
+      // Consume body before throwing to avoid connection leak
+      await r.body.text().catch(() => {});
+      throw new Error(`${method} ${path} -> ${r.statusCode}`);
     }
+
+    // Guard: should never reach here, but satisfies TypeScript return type
+    throw new Error(`${method} ${path} -> exhausted retries`);
   }
 
   async get(path: string): Promise<any> {
@@ -695,8 +701,9 @@ export class Wekan {
         let cards: WekanCard[];
         try {
           cards = await this.listCards(board._id, list._id);
-        } catch (e) {
+        } catch (e: any) {
           // Skip list on error (e.g. transient 502) instead of aborting entire operation
+          console.error(`[getMyPendingCards] Skipping list "${list.title}" (${list._id}): ${e.message || e}`);
           continue;
         }
 
