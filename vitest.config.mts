@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['check-merged-prs-lib.js'],
+      include: ['check-merged-prs-lib.js', 'accumulate-tokens-lib.js'],
       thresholds: {
         statements: 70,
         branches: 70,
