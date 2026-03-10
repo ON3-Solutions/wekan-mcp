@@ -217,6 +217,84 @@ server.tool("updateCardField", "Update a custom field on a card. Use IDs from ge
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 });
 
+// ============================================
+// Assistente de Chamados (jarbas-card)
+// ============================================
+
+// IDs fixos do board uan® para criação de chamados OPS
+const OPS_BOARD_ID = "Sc5d6SZ8Lgdpa5Yj4";          // board uan®
+const OPS_LIST_ID = "u7tEHFo3et547QY8u";            // lista Backlog
+const OPS_SWIMLANE_ID = "EPd7hqyqSvpFTLMau";        // DevOps - UAN
+const OPS_ASSIGNEE_ID = "XvR5MTWzozNxQwnJB";         // Jarbas (user Wekan)
+const OPS_REPO_FIELD_ID = "LtzGzRChtZLswGtoe";       // custom field "Repositório"
+
+// Mapeamento Discord ID → Wekan User ID
+const DISCORD_TO_WEKAN: Record<string, string> = {
+  // Preencher com os IDs reais do Discord
+  // "discord_user_id": "wekan_user_id"
+  "jesus":    "CvraGvhcL6uBJGYc9",
+  "rafael":   "GcsF9GD8o2oXifBpR",
+  "thalles":  "o7KzsZ4TL7nGWZ3fr",
+  "lucas":    "3HkaDem7QP7WgzfYq",
+  "luiz":     "CrRHMiCQ7HTviPK6L",
+  "luis":     "pBENojbBwSopFX5Zk",
+  "wanderlei":"Rb8fzCh92A2NFhzQ8",
+  "izac":     "XYYDjxBGZmzehL3nz",
+};
+
+server.tool("createOpsCard", "Create an OPS ticket card in the uan® board (Backlog list). Abstracts board/list/swimlane/assignee IDs. Use this when the user confirms they want to open a chamado.", {
+  title: z.string().describe("Card title — short, descriptive (e.g., 'Login 401 para usuário específico - tenant polimix')"),
+  description: z.string().describe("Card description in markdown. Must include: problem context, reproduction steps, technical data (logs, requests, responses) in code blocks, and identified repositories."),
+  repositories: z.array(z.string()).describe("Repository names involved in the resolution (e.g., ['monolito', 'iged-web'])"),
+  reporterDiscordId: z.string().optional().describe("Discord user ID of the reporter (used to add as card member)")
+}, async (args) => {
+  const { title, description, repositories, reporterDiscordId } = args;
+
+  // Monta custom fields
+  const customFields: Array<{_id: string; value: any}> = [];
+  if (repositories.length > 0) {
+    customFields.push({ _id: OPS_REPO_FIELD_ID, value: repositories.join(", ") });
+  }
+
+  // Monta lista de membros: Jarbas (assignee) + reporter (se mapeado)
+  const members: string[] = [OPS_ASSIGNEE_ID];
+  if (reporterDiscordId) {
+    const wekanId = DISCORD_TO_WEKAN[reporterDiscordId];
+    if (wekanId && !members.includes(wekanId)) {
+      members.push(wekanId);
+    }
+  }
+
+  const body = {
+    authorId: OPS_ASSIGNEE_ID,
+    title,
+    description,
+    swimlaneId: OPS_SWIMLANE_ID,
+    members,
+    customFields,
+  };
+
+  const card = await wekan.createCard(OPS_BOARD_ID, OPS_LIST_ID, body);
+
+  const cardUrl = `${BASE_URL}/b/${OPS_BOARD_ID}/uan/card/${card._id}`;
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        ok: true,
+        id: card._id,
+        title: card.title,
+        url: cardUrl,
+        board: "uan®",
+        list: "Backlog",
+        repositories: repositories.join(", "),
+        members: members.length,
+      }, null, 2)
+    }]
+  };
+});
+
 // Start transport
 const transport = new StdioServerTransport();
 await server.connect(transport);
