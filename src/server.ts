@@ -228,18 +228,16 @@ const OPS_SWIMLANE_ID = "EPd7hqyqSvpFTLMau";        // DevOps - UAN
 const OPS_ASSIGNEE_ID = "XvR5MTWzozNxQwnJB";         // Jarbas (user Wekan)
 const OPS_REPO_FIELD_ID = "LtzGzRChtZLswGtoe";       // custom field "Repositório"
 
-// Mapeamento Discord ID → Wekan User ID
+// Mapeamento Discord User ID → Wekan User ID
 const DISCORD_TO_WEKAN: Record<string, string> = {
-  // Preencher com os IDs reais do Discord
-  // "discord_user_id": "wekan_user_id"
-  "jesus":    "CvraGvhcL6uBJGYc9",
-  "rafael":   "GcsF9GD8o2oXifBpR",
-  "thalles":  "o7KzsZ4TL7nGWZ3fr",
-  "lucas":    "3HkaDem7QP7WgzfYq",
-  "luiz":     "CrRHMiCQ7HTviPK6L",
-  "luis":     "pBENojbBwSopFX5Zk",
-  "wanderlei":"Rb8fzCh92A2NFhzQ8",
-  "izac":     "XYYDjxBGZmzehL3nz",
+  "809793988659642369":  "CvraGvhcL6uBJGYc9",  // Jesus
+  "817436181641560064":  "GcsF9GD8o2oXifBpR",  // Rafael
+  "336548911416082435":  "o7KzsZ4TL7nGWZ3fr",  // Thalles
+  "594500445154705409":  "pBENojbBwSopFX5Zk",  // Luís Miguel
+  "599973357429194753":  "CrRHMiCQ7HTviPK6L",  // Luiz Felipe
+  "296907481085378560":  "3HkaDem7QP7WgzfYq",  // Lucas Brumm
+  "534933167686025217":  "XYYDjxBGZmzehL3nz",  // Izac
+  "1480648670922805293": "hKZgkKoDs75PYGvMh",  // Willian Felice
 };
 
 server.tool("createOpsCard", "Create an OPS ticket card in the uan® board (Backlog list). Abstracts board/list/swimlane/assignee IDs. Use this when the user confirms they want to open a chamado.", {
