@@ -237,6 +237,7 @@ const DISCORD_TO_WEKAN: Record<string, string> = {
   "599973357429194753":  "CrRHMiCQ7HTviPK6L",  // Luiz Felipe
   "296907481085378560":  "3HkaDem7QP7WgzfYq",  // Lucas Brumm
   "534933167686025217":  "XYYDjxBGZmzehL3nz",  // Izac
+  "1072953887964807230": "Rb8fzCh92A2NFhzQ8",  // Wanderlei
   "1480648670922805293": "hKZgkKoDs75PYGvMh",  // Willian Felice
 };
 
