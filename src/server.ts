@@ -226,7 +226,7 @@ const OPS_BOARD_ID = "Sc5d6SZ8Lgdpa5Yj4";          // board uan®
 const OPS_LIST_ID = "u7tEHFo3et547QY8u";            // lista Backlog
 const OPS_SWIMLANE_ID = "EPd7hqyqSvpFTLMau";        // DevOps - UAN
 const OPS_ASSIGNEE_ID = "XvR5MTWzozNxQwnJB";         // Jarbas (user Wekan)
-const OPS_REPO_FIELD_ID = "LtzGzRChtZLswGtoe";       // custom field "Repositório"
+const OPS_REPO_FIELD_NAME = "Repositório";              // custom field name (usado via updateCardField)
 
 // Mapeamento Discord User ID → Wekan User ID
 const DISCORD_TO_WEKAN: Record<string, string> = {
@@ -249,12 +249,6 @@ server.tool("createOpsCard", "Create an OPS ticket card in the uan® board (Back
 }, async (args) => {
   const { title, description, repositories, reporterDiscordId } = args;
 
-  // Monta custom fields
-  const customFields: Array<{_id: string; value: any}> = [];
-  if (repositories.length > 0) {
-    customFields.push({ _id: OPS_REPO_FIELD_ID, value: repositories.join(", ") });
-  }
-
   // Monta lista de membros: Jarbas (assignee) + reporter (se mapeado)
   const members: string[] = [OPS_ASSIGNEE_ID];
   if (reporterDiscordId) {
@@ -270,12 +264,21 @@ server.tool("createOpsCard", "Create an OPS ticket card in the uan® board (Back
     description,
     swimlaneId: OPS_SWIMLANE_ID,
     members,
-    customFields,
   };
 
   const card = await wekan.createCard(OPS_BOARD_ID, OPS_LIST_ID, body);
 
-  const cardUrl = `${BASE_URL}/b/${OPS_BOARD_ID}/uan/card/${card._id}`;
+  // Setar assignees via PUT (createCard não atribui automaticamente)
+  await wekan.put(`/api/boards/${OPS_BOARD_ID}/lists/${OPS_LIST_ID}/cards/${card._id}`, {
+    assignees: members,
+  });
+
+  // Setar custom field Repositório via PUT (createCard ignora customFields)
+  if (repositories.length > 0) {
+    await wekan.updateCardField(OPS_BOARD_ID, OPS_LIST_ID, card._id, OPS_REPO_FIELD_NAME, repositories.join(", "));
+  }
+
+  const cardUrl = `${BASE_URL}/b/${OPS_BOARD_ID}/uan/${card._id}`;
 
   return {
     content: [{
