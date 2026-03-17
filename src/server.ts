@@ -245,32 +245,36 @@ server.tool("createOpsCard", "Create an OPS ticket card in the uan® board (Back
   title: z.string().describe("Card title — short, descriptive (e.g., 'Login 401 para usuário específico - tenant polimix')"),
   description: z.string().describe("Card description in markdown. Must include: problem context, reproduction steps, technical data (logs, requests, responses) in code blocks, and identified repositories."),
   repositories: z.array(z.string()).describe("Repository names involved in the resolution (e.g., ['monolito', 'iged-web'])"),
-  reporterDiscordId: z.string().optional().describe("Discord user ID of the reporter (used to add as card member)")
+  reporterDiscordId: z.string().optional().describe("Discord user ID of the reporter (used to add as card assignee)")
 }, async (args) => {
   const { title, description, repositories, reporterDiscordId } = args;
 
-  // Monta lista de membros: Jarbas (assignee) + reporter (se mapeado)
-  const members: string[] = [OPS_ASSIGNEE_ID];
+  // IMPORTANTE: A uan® usa APENAS assignees, NÃO usa members.
+  // Não setar "members" no body do createCard nem via PUT.
+  // O campo "members" no Wekan adiciona o usuário como membro do card,
+  // mas a uan® controla responsabilidade exclusivamente via assignees.
+  const assignees: string[] = [OPS_ASSIGNEE_ID];
   if (reporterDiscordId) {
     const wekanId = DISCORD_TO_WEKAN[reporterDiscordId];
-    if (wekanId && !members.includes(wekanId)) {
-      members.push(wekanId);
+    if (wekanId && !assignees.includes(wekanId)) {
+      assignees.push(wekanId);
     }
   }
 
+  // NÃO incluir "members" no body — somente assignees são usados pela uan®
   const body = {
     authorId: OPS_ASSIGNEE_ID,
     title,
     description,
     swimlaneId: OPS_SWIMLANE_ID,
-    members,
   };
 
   const card = await wekan.createCard(OPS_BOARD_ID, OPS_LIST_ID, body);
 
-  // Setar assignees via PUT (createCard não atribui automaticamente)
+  // Setar APENAS assignees via PUT (createCard não atribui automaticamente).
+  // Não usar "members" — a uan® não utiliza esse campo.
   await wekan.put(`/api/boards/${OPS_BOARD_ID}/lists/${OPS_LIST_ID}/cards/${card._id}`, {
-    assignees: members,
+    assignees,
   });
 
   // Setar custom field Repositório via PUT (createCard ignora customFields)
@@ -291,7 +295,7 @@ server.tool("createOpsCard", "Create an OPS ticket card in the uan® board (Back
         board: "uan®",
         list: "Backlog",
         repositories: repositories.join(", "),
-        members: members.length,
+        assignees: assignees.length,
       }, null, 2)
     }]
   };
